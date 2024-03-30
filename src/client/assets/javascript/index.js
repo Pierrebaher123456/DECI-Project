@@ -75,38 +75,51 @@ async function delay(ms) {
 // This async function controls the flow of the race, add the logic and error handling
 async function handleCreateRace() {
 	// render starting UI
-	renderAt('#race', renderRaceStartView())
-
+	
 	// TODO - Get player_id and track_id from the store
-	playerId = store.player_id
-	trackId = store.track_id
+	let playerId = store.player_id
+	let trackId = store.track_id
+	renderAt('#race', renderRaceStartView(trackId, playerId))
 	
 	// const race = TODO - invoke the API call to create the race, then save the result
 
-	const race = createRace(playerId, trackId);
+	const race = await createRace(playerId, trackId);
+	
 
 	// TODO - update the store with the race id
 	// For the API to work properly, the race id should be race id - 1
 	
-	
+	store.race_id = parseInt(race.ID) - 1;
 
 	// The race has been created, now start the countdown
 	// TODO - call the async function runCountdown
 
+	runCountdown();
+
 	// TODO - call the async function startRace
 
+	startRace(store.race_id);
+
 	// TODO - call the async function runRace
+
+	runRace(store.race_id);
 }
 
 function runRace(raceID) {
 	return new Promise(resolve => {
 	// TODO - use Javascript's built in setInterval method to get race info every 500ms
 
-	/* 
+	const raceInterval = setInterval(() => {getRace}, 500);
+
+	/*
 		TODO - if the race info status property is "in-progress", update the leaderboard by calling:
 
 		renderAt('#leaderBoard', raceProgress(res.positions))
 	*/
+
+	if (raceInterval.status === 'in-progress') {
+		renderAt('#leaderBoard', raceProgress(res.positions))
+	}
 
 	/* 
 		TODO - if the race info status property is "finished", run the following:
@@ -115,8 +128,15 @@ function runRace(raceID) {
 		renderAt('#race', resultsView(res.positions)) // to render the results view
 		reslove(res) // resolve the promise
 	*/
+	if (raceInterval.status === 'finished') {
+		clearInterval(raceInterval)
+		renderAt('#race', resultsView(res.positions))
+		resolve(res)
+	}
+
 	})
 	// remember to add error handling for the Promise
+	.catch(err => console.error(err))
 }
 
 async function runCountdown() {
@@ -126,13 +146,23 @@ async function runCountdown() {
 		let timer = 3
 
 		return new Promise(resolve => {
+			// run this DOM manipulation to decrement the countdown for the user
+			let getElement = document.getElementById('big-numbers');	
+
 			// TODO - use Javascript's built in setInterval method to count down once per second
 
-			// run this DOM manipulation to decrement the countdown for the user
-			document.getElementById('big-numbers').innerHTML = --timer
+			const countdownInt = setInterval(() => {
+				if (timer > 0){
+					timer --;
+				} getElement.innerHTML = timer
+			}, 1000)
 
 			// TODO - if the countdown is done, clear the interval, resolve the promise, and return
 
+			if (timer === 0){
+				clearInterval(countdownInt)
+                resolve()
+			}
 		})
 	} catch(error) {
 		console.log(error);
@@ -152,6 +182,8 @@ function handleSelectPodRacer(target) {
 	target.classList.add('selected')
 
 	// TODO - save the selected racer to the store
+
+	store.player_id = target.id
 }
 
 function handleSelectTrack(target) {
@@ -168,11 +200,14 @@ function handleSelectTrack(target) {
 
 	// TODO - save the selected track id to the store
 	
+	store.track_id = target.id
 }
 
 function handleAccelerate() {
 	console.log("accelerate button clicked")
 	// TODO - Invoke the API call to accelerate
+
+	accelerate(parseInt(store.race_id))
 }
 
 // HTML VIEWS ------------------------------------------------
@@ -326,56 +361,48 @@ function defaultFetchOpts() {
 
 // TODO - Make a fetch call (with error handling!) to each of the following API endpoints 
 
-fetch(SERVER)
-	.then(res => {
-		if (!res.ok) {
-			throw new Error(`HTTP error! status: ${res.status}`);
-		}
-		return res.text();
-	})
-	.then(data => {
-		if (data) {
-            return JSON.parse(data);
-        } else {
-            console.log('Empty response');
-            return {};
-        }
-	})
-	.catch(err => console.error("Problem with defaultFetchOpts request::", err))
+	// try {fetch(SERVER)
+	// 		.then(res => {
+	// 			return res.json();
+	// 		})
+	// 		.then(data => {
+	// 			if (data) {
+	// 				console.log(data);
+	// 			}
+	// 		})
+	// } catch (err) {
+	// 	err => console.error("Problem with fetching server: " + err)
+	// }
+
 
 function getTracks() {
-	// GET request to `${SERVER}/api/tracks`
-
-	fetch(`${SERVER}/api/tracks`, {
-		method: 'GET',
+	return fetch(`${SERVER}/api/tracks`, {
+	method: 'GET',
 		...defaultFetchOpts(),
 	})
-		.then(response => response.json())
-		.then(data => console.log(data))
-		.catch(err => console.log("Problem with getTracks request::", err))
+		.then(res => res.json())
+		.catch(err => console.log("Problem with getTracks request:", err));
 }
 
 function getRacers() {
-	// GET request to `${SERVER}/api/cars`
-
-	fetch(`${SERVER}/api/cars`, {
+	return fetch(`${SERVER}/api/cars`, {
 		method: 'GET',
 		...defaultFetchOpts(),
 	})
-		.then(response => response.json())
-		.then(data => console.log(data))
-		.catch(err => console.log("Problem with getRacers request::", err))
+		.then(res => res.json())
+		.catch(err => console.log("Problem with getRacers request:", err));
 }
 
+
 function createRace(player_id, track_id) {
-	player_id = parseInt(player_id)
-	track_id = parseInt(track_id)
-	const body = { player_id, track_id }
+	const playerId = parseInt(player_id)
+	const trackId = parseInt(track_id)
+	const body = { player_id: playerId, track_id: trackId }
 	
-	return fetch(`${SERVER}/api/races`, {
+	return fetch(`${SERVER}/api/races`, {              
 		method: 'POST',
 		...defaultFetchOpts(),
-		body: body
+		body: JSON.stringify(body)
 	
 })
 	.then(res => res.json())
@@ -393,13 +420,16 @@ function getRace(id) {
     .catch(err => console.log("Problem with getRace request::", err))
 }
 
-function startRace(id) {
+async function startRace(id) {
+	const body = parseInt(store.race_id);
+
 	return fetch(`${SERVER}/api/races/${id}/start`, {
 		method: 'POST',
 		...defaultFetchOpts(),
+		body: body
 	})
-	.then(res => res.json())
-	.catch(err => console.log("Problem with getRace request::", err))
+	// .then(res => res.json())
+	.catch(err => console.log("Problem with getRace request: ", err))
 }
 
 function accelerate(id) {
@@ -410,9 +440,9 @@ function accelerate(id) {
     method: 'POST',
     ...defaultFetchOpts(),
     })
-		.then(function (response) {
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
+		.then(function (res) {
+			if (!res.ok) {
+				throw new Error(`HTTP error! status: ${res.status}`);
 			}
 		})
 }
